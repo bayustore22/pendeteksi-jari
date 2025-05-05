@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deteksi Jumlah Jari</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8f9fa;
+      color: #343a40;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .container {
+      width: 100%;
+      max-width: 800px;
+      padding: 20px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    
+    .title {
+      margin: 30px 0;
+      font-weight: 600;
+      color: #212529;
+      font-size: 1.8rem;
+    }
+    
+    .count-display {
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 15px 30px;
+      margin-bottom: 20px;
+      display: inline-block;
+    }
+    
+    .count-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #007bff;
+    }
+    
+    .camera-container {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    }
+    
+    canvas, video {
+      display: block;
+      width: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); 
+    }
+    
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: none;
+    }
+    
+    .footer {
+      margin-top: 20px;
+      font-size: 0.85rem;
+      color: #6c757d;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Deteksi Jumlah Jari</h1>
+    
+    <div class="count-display">
+      Jumlah Jari: <span id="count" class="count-value">0</span>
+    </div>
+    
+    <div class="camera-container">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+    </div>
+    
+    <div class="footer">
+      Tunjukkan tangan Anda ke kamera untuk mendeteksi jumlah jari
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script>
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('canvas');
+    const countDisplay = document.getElementById('count');
+    
+    function setupCanvas() {
+      const containerWidth = canvasElement.parentElement.clientWidth;
+      const containerHeight = containerWidth * (3/4); 
+      
+      canvasElement.width = containerWidth;
+      canvasElement.height = containerHeight;
+      
+      videoElement.width = containerWidth;
+      videoElement.height = containerHeight;
+    }
+    
+    setupCanvas();
+    window.addEventListener('resize', setupCanvas);
+    
+    const canvasCtx = canvasElement.getContext('2d');
+    
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
+    });
+    
+    hands.onResults(results => {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, results.image.width, results.image.height);
+canvasElement.width = results.image.width;
+canvasElement.height = results.image.height;
+      
+      if (results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        const fingerTips = [8, 12, 16, 20]; 
+        
+        let count = 0;
+        fingerTips.forEach(tipIdx => {
+          if (landmarks[tipIdx].y < landmarks[tipIdx - 2].y) {
+            count++;
+          }
+        });
+        
+        const isThumbOpen = landmarks[4].x > landmarks[3].x;
+        if (isThumbOpen) count++;
+        
+        countDisplay.textContent = count;
+        
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { 
+          color: '#00B5FF', 
+          lineWidth: 3 
+        });
+        drawLandmarks(canvasCtx, landmarks, { 
+          color: '#FF3366', 
+          lineWidth: 2,
+          radius: 4
+        });
+      } else {
+        countDisplay.textContent = 0;
+      }
+      
+      canvasCtx.restore();
+    });
+    
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
+    
+    camera.start();
+  </script>
+</body>
+</html>
